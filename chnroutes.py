@@ -6,6 +6,33 @@ import sys
 import argparse
 import math
 import textwrap
+import codecs
+
+
+def generate_mysql():
+    results = fetch_ip_data()  
+    rfile=codecs.open('routes.txt','w', 'utf-8')
+    for ip,_,mask2,num_ip in results:
+        route_item='insert into 中国IP段(IP地址, 掩码, IP地址数字起始, IP地址数字结束, 数量) values("%s", %d, inet_aton("%s"), inet_aton("%s") + %d - 1, %d);\n'%(ip,mask2, ip, ip, num_ip, num_ip)
+        rfile.write(route_item)
+    rfile.close()
+    print ("生成完成")
+
+    """
+--
+-- 表的结构 `中国IP段`
+--
+
+CREATE TABLE IF NOT EXISTS `中国ip段` (
+  `IP段编号` int(11) NOT NULL AUTO_INCREMENT,
+  `IP地址` varchar(15) NOT NULL,
+  `掩码` tinyint(4) NOT NULL,
+  `IP地址数字起始` int(10) unsigned NOT NULL,
+  `IP地址数字结束` int(10) unsigned NOT NULL,
+  `数量` int(11) NOT NULL,
+  PRIMARY KEY (`IP段编号`)
+);
+"""
 
 
 def generate_ovpn(metric):
@@ -190,7 +217,6 @@ def fetch_ip_data():
     print ("Fetching data from apnic.net, it might take a few minutes, please wait...")
     url=r'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
     data=urllib.request.urlopen(url).read().decode()
-    print (data)
     
     cnregex=re.compile(r'apnic\|cn\|ipv4\|[0-9\.]+\|[0-9]+\|[0-9]+\|a.*',re.IGNORECASE)
     cndata=cnregex.findall(data)
@@ -218,7 +244,7 @@ def fetch_ip_data():
         #mask in *nix format
         mask2=32-int(math.log(num_ip,2))
         
-        results.append((starting_ip,mask,mask2))
+        results.append((starting_ip,mask,mask2,num_ip))
          
     return results
 
@@ -227,7 +253,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description="Generate routing rules for vpn.")
     parser.add_argument('-p','--platform',
                         dest='platform',
-                        default='openvpn',
+                        default='mysql',
                         nargs='?',
                         help="Target platforms, it can be openvpn, mac, linux," 
                         "win, android. openvpn by default.")
@@ -240,7 +266,9 @@ if __name__=='__main__':
     
     args = parser.parse_args()
     
-    if args.platform.lower() == 'openvpn':
+    if args.platform.lower() == 'mysql':
+        generate_mysql()
+    elif args.platform.lower() == 'openvpn':
         generate_ovpn(args.metric)
     elif args.platform.lower() == 'linux':
         generate_linux(args.metric)
